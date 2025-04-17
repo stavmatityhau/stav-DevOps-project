@@ -23,30 +23,53 @@ pipeline {
             }
         }
 
-        stage('Unit Tests') {
-            steps {
-                sh '''
-                    echo "Running Unit tests" 
-                    npm ci 
-                    npm run test:junit
-                '''
-            }
-            post {
-                always {
-                    junit 'jest-results/junit.xml'
-                }
-            }
-        }
-
         stage('Build') {
             steps {
                 sh '''
                     echo "Building project..." 
                     node --version
                     npm --version 
+                    npm ci 
                     npm run build 
                     ls -la
                 '''
+            }
+        }
+
+        stage('Tests'){
+            parallel{
+
+                stage('Unit Tests') {
+                    steps {
+                        sh '''
+                        echo "Running Unit tests" 
+                        npm run test:junit
+                        '''
+                    }
+                    post {
+                        always {
+                            junit 'jest-results/junit.xml'
+                        }
+                    }
+                }
+
+                stage('E2E Tests') {
+                    steps {
+                        sh '''
+                            echo "Starting server..." 
+                            npx serve -s build &
+                            sleep 10 
+                    
+                            echo "Running E2E tests..."
+                            npx playwright test --reporter=html
+                        '''
+                    }
+                    post {
+                        always {
+                            publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Playwright Report', reportTitles: '', useWrapperFileDirectly: true])
+                        }
+                    }
+                }
             }
         }
 
@@ -56,23 +79,6 @@ pipeline {
             }
         }
 
-        stage('E2E Tests') {
-            steps {
-                sh '''
-                    echo "Starting server..." 
-                    npx serve -s build &
-                    sleep 10 
-                    
-                    echo "Running E2E tests..."
-                    npx playwright test --reporter=html
-                '''
-            }
-            post {
-                always {
-                    publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Playwright Report', reportTitles: '', useWrapperFileDirectly: true])
-                }
-            }
-        }
     }
 
     post {
