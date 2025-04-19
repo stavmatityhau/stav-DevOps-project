@@ -8,5 +8,5 @@ test-results/
 <<<<<<< HEAD
 ansible/docker.env
 =======
-.env
+ansible/.env
 >>>>>>> origin/main
