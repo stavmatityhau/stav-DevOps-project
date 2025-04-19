@@ -6,5 +6,5 @@ jest-results/
 playwright-report/
 test-results/
 ansible/.env
-ansible/docker.env
 ansible/ansible.cfg
+
