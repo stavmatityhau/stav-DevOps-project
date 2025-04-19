@@ -76,12 +76,11 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                    script {
+                script {
                         sh '''
                             echo $DOCKER_HUB_CREDS | docker login -u stav3434 --password-stdin
                             docker buildx build --platform linux/amd64,linux/arm64 -t stav3434/stav-devops-project:latest . --push
                         '''
-                    }
                 }
             }
         }
