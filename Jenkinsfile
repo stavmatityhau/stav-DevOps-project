@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         PATH = "/opt/homebrew/bin:$PATH"
+        DOCKER_HUB_CREDS = credentials('docker-hub-credentials')
     }
 
     tools {
@@ -75,7 +76,12 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t stav-devops-project .'
+                sh '''
+                    echo $DOCKER_HUB_CREDS_PSW | docker login -u $DOCKER_HUB_CREDS_USR --password-stdin
+                    
+                    docker buildx create --name mybuilder --use || true
+                    docker buildx build --platform linux/amd64,linux/arm64 -t stav3434/stav-devops-project:latest . --push
+                '''
             }
         }
 
