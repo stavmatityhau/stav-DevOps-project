@@ -86,6 +86,7 @@ pipeline {
                 withCredentials([string(credentialsId: 'docker-hub-credentials', variable: 'DOCKER_HUB_TOKEN')]) {
                     sh '''
                         echo "$DOCKER_HUB_TOKEN" | docker login -u stav3434 --password-stdin
+                        docker buildx create --use || true
                         docker buildx build --platform linux/amd64,linux/arm64 -t stav3434/stav-devops-project:latest . --push
                     '''
                 }
