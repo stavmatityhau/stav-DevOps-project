@@ -3,7 +3,6 @@ pipeline {
 
     environment {
         PATH = "/opt/homebrew/bin:$PATH"
-        DOCKER_HUB_CREDS = credentials('docker-hub-credentials')
     }
 
     tools {
@@ -38,13 +37,12 @@ pipeline {
         }
 
         stage('Tests'){
-            parallel{
-
+            parallel {
                 stage('Unit Tests') {
                     steps {
                         sh '''
-                        echo "Running Unit tests" 
-                        npm run test:junit
+                            echo "Running Unit tests" 
+                            npm run test:junit
                         '''
                     }
                     post {
@@ -67,7 +65,16 @@ pipeline {
                     }
                     post {
                         always {
-                            publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Playwright Report', reportTitles: '', useWrapperFileDirectly: true])
+                            publishHTML([
+                                allowMissing: false, 
+                                alwaysLinkToLastBuild: false, 
+                                keepAll: false, 
+                                reportDir: 'playwright-report', 
+                                reportFiles: 'index.html', 
+                                reportName: 'Playwright Report', 
+                                reportTitles: '', 
+                                useWrapperFileDirectly: true
+                            ])
                         }
                     }
                 }
@@ -76,11 +83,11 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                script {
-                        sh '''
-                            echo $DOCKER_HUB_CREDS | docker login -u stav3434 --password-stdin
-                            docker buildx build --platform linux/amd64,linux/arm64 -t stav3434/stav-devops-project:latest . --push
-                        '''
+                withCredentials([string(credentialsId: 'docker-hub-token', variable: 'DOCKER_HUB_TOKEN')]) {
+                    sh '''
+                        echo "$DOCKER_HUB_TOKEN" | docker login -u stav3434 --password-stdin
+                        docker buildx build --platform linux/amd64,linux/arm64 -t stav3434/stav-devops-project:latest . --push
+                    '''
                 }
             }
         }
