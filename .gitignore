@@ -5,4 +5,6 @@ npm-debug.log
 jest-results/
 playwright-report/
 test-results/
-.env
+ansible/.env
+ansible/docker.env
+ansible/ansible.cfg
