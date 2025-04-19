@@ -83,7 +83,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                withCredentials([string(credentialsId: 'docker-hub-token', variable: 'DOCKER_HUB_TOKEN')]) {
+                withCredentials([string(credentialsId: 'docker-hub-credentials', variable: 'DOCKER_HUB_TOKEN')]) {
                     sh '''
                         echo "$DOCKER_HUB_TOKEN" | docker login -u stav3434 --password-stdin
                         docker buildx build --platform linux/amd64,linux/arm64 -t stav3434/stav-devops-project:latest . --push
