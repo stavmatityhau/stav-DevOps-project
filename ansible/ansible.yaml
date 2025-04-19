@@ -1,0 +1,191 @@
+---
+- name: Create infrastructure for Stav DevOps Project
+  hosts: localhost
+  connection: local
+  gather_facts: False
+  vars_files:
+    - .env  
+  
+  tasks:
+    - name: create VPC
+      amazon.aws.ec2_vpc_net:
+        name: "{{ vpc_name }}"
+        cidr_block: "{{ network }}"
+        region: "{{ aws_region }}"
+        state: present
+        dns_hostnames: yes
+        dns_support: yes
+        multi_ok: no
+        tags:
+          Name: "{{ vpc_name }}"
+      register: vpc
+
+    - name: associate subnet to the VPC
+      amazon.aws.ec2_vpc_subnet:
+        state: present
+        vpc_id: "{{ vpc.vpc.id }}"
+        region: "{{ aws_region }}"
+        cidr: "{{ subnet_cidr }}"
+        map_public: yes
+        az: "{{ subnet }}"
+        resource_tags:
+          Name: "{{ vpc_name }}-subnet"
+        wait: yes
+      register: subnet
+
+    - name: create IGW
+      amazon.aws.ec2_vpc_igw:
+        vpc_id: "{{ vpc.vpc.id }}"
+        region: "{{ aws_region }}"
+        state: present
+        tags:
+          Name: "{{ vpc_name }}_igw"
+      register: igw
+
+    - name: Route table for public Subnet
+      amazon.aws.ec2_vpc_route_table:
+        vpc_id: "{{ vpc.vpc.id }}"
+        region: "{{ aws_region }}"
+        state: present
+        subnets:
+          - "{{ subnet.subnet.id }}"
+        routes:
+          - dest: 0.0.0.0/0
+            gateway_id: "{{ igw.gateway_id }}"
+        tags:
+          Name: "{{ vpc_name }}_public_rt"
+
+    - name: Create security group
+      amazon.aws.ec2_security_group:
+        name: "{{ vpc_name }}-SG"
+        description: "Security group for Stav DevOps Project"
+        vpc_id: "{{ vpc.vpc.id }}"
+        region: "{{ aws_region }}"
+        state: present
+        rules:
+          - proto: tcp
+            ports:
+            - 80
+            - 22
+            cidr_ip: 0.0.0.0/0
+      register: sg
+
+    - name: Create server
+      amazon.aws.ec2_instance:
+        name: "{{ server_name }}"
+        image_id: "{{ aws_ubuntu_ami }}"
+        wait: yes
+        instance_type: "{{ server_type }}"
+        region: "{{ aws_region }}"
+        security_group: "{{ sg.group_id }}"
+        vpc_subnet_id: "{{ subnet.subnet.id }}"
+        key_name: "{{ keypair }}"
+        volumes:
+          - device_name: /dev/sda1
+            ebs:
+              volume_type: gp3
+              volume_size: "{{ server_volume_size }}"
+              delete_on_termination: true
+        tags:
+          Name: "{{ server_name }}"
+          Environment: "{{ env }}"
+        network:
+          assign_public_ip: yes
+        state: running
+      register: ec2
+
+    - name: get ip of instance
+      amazon.aws.ec2_instance_info:
+        filters:
+          "tag:Name": "{{ server_name }}"
+          instance-state-name: [ "running"]
+      register: ec2_data
+
+    - name: Add server public IP to application host group
+      add_host: 
+        hostname: "{{ ec2_data.instances[0].public_ip_address }}"
+        groups: app
+        ansible_user: ubuntu
+        ansible_ssh_private_key_file: "~/.ssh/{{ keypair }}.pem"
+
+    - name: Save server information
+      ansible.builtin.lineinfile:
+        path: server-info.env
+        line: "SERVER_IP={{ ec2_data.instances[0].public_ip_address }}\nSERVER_ID={{ ec2_data.instances[0].instance_id }}"
+        state: present
+        create: True
+
+    - name: Wait for SSH to be available
+      wait_for:
+        host: "{{ ec2_data.instances[0].public_ip_address }}"
+        port: 22
+        timeout: 300
+
+- name: Setup DevOps Project on the server
+  hosts: app
+  become: True
+  gather_facts: False
+  vars_files:
+    - docker.env
+  tasks:
+    - name: Create app directory
+      file:
+        path: /opt/devops-app
+        state: directory
+        mode: '0755'
+
+    - name: Install Docker and dependencies
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+        state: present
+        update_cache: yes
+
+    - name: Add Docker GPG key
+      ansible.builtin.shell: curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu focal stable
+        state: present
+        update_cache: yes
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Pull Docker image from DockerHub
+      docker_image:
+        name: "{{ docker_user }}/stav-devops-project"
+        source: pull
+
+    - name: Create docker-compose.yml
+      copy:
+        content: |
+          version: "3.3"
+          services:
+            web:
+              image: {{ docker_user }}/stav-devops-project:latest
+              ports:
+                - "80:80"
+              restart: always
+        dest: /opt/devops-app/docker-compose.yml
+
+    - name: Run the application with Docker Compose
+      shell: docker compose up -d
+      args:
+        chdir: /opt/devops-app/
