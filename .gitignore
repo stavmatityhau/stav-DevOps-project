@@ -5,8 +5,4 @@ npm-debug.log
 jest-results/
 playwright-report/
 test-results/
-<<<<<<< HEAD
-ansible/docker.env
-=======
 ansible/.env
->>>>>>> origin/main
