@@ -4,8 +4,6 @@ pipeline {
     environment {
         PATH = "/opt/homebrew/bin:$PATH"
         DOCKER_HUB_CREDS = credentials('docker-hub-credentials')
-        DOCKER_HUB_USR = credentials('docker-hub-user-password') 
-        DOCKER_HUB_PSW = credentials('docker-hub-user-password')
     }
 
     tools {
@@ -78,11 +76,13 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                script {
-                    sh '''
-                        echo $DOCKER_HUB_PSW | docker login -u $DOCKER_HUB_USR --password-stdin
-                        docker buildx build --platform linux/amd64,linux/arm64 -t your_username/your_image:latest . --push
-                    '''
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-user-password', usernameVariable: 'DOCKER_HUB_USR', passwordVariable: 'DOCKER_HUB_PSW')]) {
+                    script {
+                        sh '''
+                            echo $DOCKER_HUB_PSW | docker login -u $DOCKER_HUB_USR --password-stdin
+                            docker buildx build --platform linux/amd64,linux/arm64 -t stav3434/stav-devops-project:latest . --push
+                        '''
+                    }
                 }
             }
         }
